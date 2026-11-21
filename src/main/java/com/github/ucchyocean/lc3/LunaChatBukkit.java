@@ -11,17 +11,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
 import org.bstats.bukkit.Metrics;
+import org.bstats.charts.DrilldownPie;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitTask;
 
 import com.github.ucchyocean.lc3.bridge.DynmapBridge;
 import com.github.ucchyocean.lc3.bridge.McMMOBridge;
@@ -35,6 +39,7 @@ import com.github.ucchyocean.lc3.command.LunaChatJapanizeCommand;
 import com.github.ucchyocean.lc3.command.LunaChatMessageCommand;
 import com.github.ucchyocean.lc3.command.LunaChatReplyCommand;
 import com.github.ucchyocean.lc3.member.ChannelMember;
+import io.papermc.paper.ServerBuildInfo;
 
 /**
  * LunaChatのBukkit実装
@@ -52,7 +57,9 @@ public class LunaChatBukkit extends JavaPlugin implements PluginInterface {
     private DynmapBridge dynmap;
     private MultiverseCoreBridge multiverse;
 
-    private BukkitTask expireCheckerTask;
+    private final Map<UUID, Location> playerLocations = new ConcurrentHashMap<>();
+    private boolean folia;
+
     private LunaChatLogger normalChatLogger;
 
     private LunaChatCommand lunachatCommand;
@@ -67,12 +74,13 @@ public class LunaChatBukkit extends JavaPlugin implements PluginInterface {
     @Override
     public void onEnable() {
 
+        folia = ServerBuildInfo.buildInfo().brandId().asString().equals("papermc:folia");
         LunaChat.setPlugin(this);
         LunaChat.setMode(LunaChatMode.BUKKIT);
 
         // Metrics
         Metrics metrics = new Metrics(this, 7936);
-        metrics.addCustomChart(new Metrics.DrilldownPie(
+        metrics.addCustomChart(new DrilldownPie(
                 "minecraft_server_version", new Callable<Map<String, Map<String, Integer>>>() {
             public Map<String, Map<String, Integer>> call() throws Exception {
                 Map<String, Map<String, Integer>> map = new HashMap<>();
@@ -131,8 +139,9 @@ public class LunaChatBukkit extends JavaPlugin implements PluginInterface {
         lcjapanizeCommand = new LunaChatJapanizeCommand();
 
         // 期限チェッカータスクの起動
-        expireCheckerTask = Bukkit.getScheduler().runTaskTimerAsynchronously(
-                this, new ExpireCheckTask(), 100, 600);
+        ExpireCheckTask expireChecker = new ExpireCheckTask();
+        Bukkit.getAsyncScheduler().runAtFixedRate(
+                this, task -> expireChecker.run(), 5, 30, TimeUnit.SECONDS);
 
         // イベント実行クラスの登録
         LunaChat.setEventSender(new BukkitEventSender());
@@ -149,9 +158,8 @@ public class LunaChatBukkit extends JavaPlugin implements PluginInterface {
     public void onDisable() {
 
         // 期限チェッカータスクの停止
-        if ( expireCheckerTask != null ) {
-            expireCheckerTask.cancel();
-        }
+        Bukkit.getAsyncScheduler().cancelTasks(this);
+        playerLocations.clear();
     }
 
     /**
@@ -308,7 +316,48 @@ public class LunaChatBukkit extends JavaPlugin implements PluginInterface {
      */
     @Override
     public void runAsyncTask(Runnable task) {
-        Bukkit.getScheduler().runTaskAsynchronously(this, task);
+        Bukkit.getAsyncScheduler().runNow(this, scheduled -> task.run());
+    }
+
+    public void trackPlayerLocation(Player player) {
+        if ( !folia ) {
+            return;
+        }
+        UUID id = player.getUniqueId();
+        playerLocations.put(id, player.getLocation());
+        player.getScheduler().runAtFixedRate(this, task -> {
+            if ( !player.isOnline() ) {
+                task.cancel();
+                return;
+            }
+            playerLocations.computeIfPresent(id, (key, previous) -> player.getLocation());
+        }, null, 1, 1);
+    }
+
+    public void stopTrackingPlayerLocation(Player player) {
+        playerLocations.remove(player.getUniqueId());
+    }
+
+    // Read positions from the owning region. Off-region chat uses the last tick's snapshot.
+    public Location getPlayerLocation(Player player) {
+        if ( !folia || Bukkit.isOwnedByCurrentRegion(player) ) {
+            return player.getLocation();
+        }
+        Location snapshot = playerLocations.get(player.getUniqueId());
+        return snapshot == null ? null : snapshot.clone();
+    }
+
+    public void runForPlayer(Player player, Runnable task) {
+        if ( !folia || Bukkit.isOwnedByCurrentRegion(player) ) {
+            task.run();
+        } else {
+            player.getScheduler().run(this, scheduled -> task.run(), null);
+        }
+    }
+
+    public void runAsyncTaskLater(Runnable task, long ticks) {
+        Bukkit.getAsyncScheduler().runDelayed(this, scheduled -> task.run(),
+                Math.max(1, ticks) * 50, TimeUnit.MILLISECONDS);
     }
 
     /**

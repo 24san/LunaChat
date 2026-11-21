@@ -7,6 +7,8 @@ package com.github.ucchyocean.lc3.bukkit;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -49,6 +51,7 @@ import net.md_5.bungee.api.chat.TextComponent;
 public class BukkitEventListener implements Listener {
 
     private static final int MAX_LIST_ITEMS = 8;
+    private final Map<AsyncPlayerChatEvent, Runnable> pendingJapanize = new ConcurrentHashMap<>();
 
     /**
      * プレイヤーがチャット発言したときに呼び出されるメソッド
@@ -105,6 +108,14 @@ public class BukkitEventListener implements Listener {
         }
     }
 
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onAsyncPlayerChatMonitor(AsyncPlayerChatEvent event) {
+        Runnable task = pendingJapanize.remove(event);
+        if ( task != null ) {
+            task.run();
+        }
+    }
+
     /**
      * プレイヤーのサーバー参加ごとに呼び出されるメソッド
      * @param event プレイヤー参加イベント
@@ -114,6 +125,8 @@ public class BukkitEventListener implements Listener {
 
         LunaChatConfig config = LunaChat.getConfig();
         Player player = event.getPlayer();
+
+        LunaChatBukkit.getInstance().trackPlayerLocation(player);
 
         // UUIDをキャッシュ
         LunaChat.getUUIDCacheData().put(player.getUniqueId().toString(), player.getName());
@@ -143,6 +156,7 @@ public class BukkitEventListener implements Listener {
     public void onQuit(PlayerQuitEvent event) {
 
         Player player = event.getPlayer();
+        LunaChatBukkit.getInstance().stopTrackingPlayerLocation(player);
         String pname = player.getName();
 
         // お互いがオフラインになるPMチャンネルがある場合は
@@ -187,7 +201,10 @@ public class BukkitEventListener implements Listener {
             if ( member instanceof ChannelMemberPlayer ) {
                 ChannelMemberOther other = ((ChannelMemberPlayer)member).toChannelMemberOther();
                 BukkitChatMessage msg = new BukkitChatMessage(other, event.getMessage());
-                LunaChatBukkit.getInstance().sendPluginMessage(msg.toByteArray());
+                LunaChatBukkit plugin = LunaChatBukkit.getInstance();
+                byte[] data = msg.toByteArray();
+                plugin.runForPlayer(event.getPlayer(), () ->
+                        event.getPlayer().sendPluginMessage(plugin, LunaChat.PMC_MESSAGE, data));
 
                 // 設定が有効ならコンソールに表示する
                 if ( config.isDisplayNormalChatOnConsole() ) {
@@ -223,7 +240,7 @@ public class BukkitEventListener implements Listener {
                 String[] temp = event.getMessage().split(separator, 2);
                 String name = temp[0];
                 String value = "";
-                if ( temp.length > 0 ) {
+                if ( temp.length > 1 ) {
                     value = temp[1];
                 }
 
@@ -233,7 +250,7 @@ public class BukkitEventListener implements Listener {
                             ChannelMember.getChannelMember(event.getPlayer());
                     if ( !channel.getMembers().contains(player) ) {
                         // 指定されたチャンネルに参加していないなら、エラーを表示して何も発言せずに終了する。
-                        event.getPlayer().sendMessage(Messages.errmsgNomember());
+                        player.sendMessage(Messages.errmsgNomember());
                         event.setCancelled(true);
                         return;
                     }
@@ -372,12 +389,18 @@ public class BukkitEventListener implements Listener {
 
                     String taskFormat = Utility.replaceColorCode(config.getJapanizeLine2Format());
 
-                    BukkitNormalChatJapanizeTask task = new BukkitNormalChatJapanizeTask(
-                            message, config.getJapanizeType(), player, taskFormat, event);
-
-                    // 発言処理を必ず先に実施させるため、遅延を入れてタスクを実行する。
+                    String original = message;
+                    JapanizeType type = config.getJapanizeType();
+                    boolean clickable = config.isEnableNormalChatClickable();
                     int wait = config.getJapanizeWait();
-                    task.runTaskLater(LunaChatBukkit.getInstance(), wait);
+                    // Snapshot recipients after the other chat handlers have filtered them.
+                    pendingJapanize.put(event, () -> {
+                        if ( !event.isCancelled() || clickable ) {
+                            BukkitNormalChatJapanizeTask task = new BukkitNormalChatJapanizeTask(
+                                    original, type, player, taskFormat, event.getRecipients());
+                            LunaChatBukkit.getInstance().runAsyncTaskLater(task, wait);
+                        }
+                    });
                 }
             }
 

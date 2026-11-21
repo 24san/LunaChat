@@ -5,7 +5,8 @@
  */
 package com.github.ucchyocean.lc3.command;
 
-import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * データマップ
@@ -14,17 +15,17 @@ import java.util.HashMap;
 public class DataMaps {
 
     /** 招待された人→招待されたチャンネル名 のマップ */
-    protected static HashMap<String, String> inviteMap;
+    protected static Map<String, String> inviteMap;
 
     /** 招待された人→招待した人 のマップ */
-    protected static HashMap<String, String> inviterMap;
+    protected static Map<String, String> inviterMap;
 
     /** tell/rコマンドの送信者→受信者 のマップ */
-    protected static HashMap<String, String> privateMessageMap;
+    protected static Map<String, String> privateMessageMap;
 
     static {
-        inviteMap = new HashMap<String, String>();
-        inviterMap = new HashMap<String, String>();
-        privateMessageMap = new HashMap<String, String>();
+        inviteMap = new ConcurrentHashMap<>();
+        inviterMap = new ConcurrentHashMap<>();
+        privateMessageMap = new ConcurrentHashMap<>();
     }
 }

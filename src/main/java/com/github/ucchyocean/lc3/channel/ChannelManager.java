@@ -10,6 +10,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 
 import com.github.ucchyocean.lc3.LunaChat;
@@ -38,7 +40,7 @@ public class ChannelManager implements LunaChatAPI {
     private File fileJapanize;
     private File fileDictionary;
     private File fileHidelist;
-    private HashMap<String, Channel> channels;
+    private volatile Map<String, Channel> channels;
     private HashMap<String, String> defaultChannels;
     private HashMap<String, String> templates;
     private HashMap<String, Boolean> japanize;
@@ -56,7 +58,7 @@ public class ChannelManager implements LunaChatAPI {
      * すべて読み込みする
      */
     @Override
-    public void reloadAllData() {
+    public synchronized void reloadAllData() {
 
         // デフォルトチャンネル設定のロード
         fileDefaults = new File(LunaChat.getDataFolder(), FILE_NAME_DCHANNELS);
@@ -135,7 +137,7 @@ public class ChannelManager implements LunaChatAPI {
         }
 
         // チャンネル設定のロード
-        channels = Channel.loadAllChannels();
+        channels = new ConcurrentHashMap<>(Channel.loadAllChannels());
     }
 
     /**
@@ -143,7 +145,9 @@ public class ChannelManager implements LunaChatAPI {
      */
     protected void saveAllChannels() {
 
-        saveDefaults();
+        synchronized (this) {
+            saveDefaults();
+        }
 
         for ( Channel channel : channels.values() ) {
             channel.save();
@@ -248,7 +252,7 @@ public class ChannelManager implements LunaChatAPI {
     /**
      * デフォルトチャンネル設定を全て削除する
      */
-    public void removeAllDefaultChannels() {
+    public synchronized void removeAllDefaultChannels() {
         defaultChannels.clear();
         saveDefaults();
     }
@@ -259,7 +263,7 @@ public class ChannelManager implements LunaChatAPI {
      * @return Japanize設定
      */
     @Override
-    public boolean isPlayerJapanize(String playerName) {
+    public synchronized boolean isPlayerJapanize(String playerName) {
         if ( !japanize.containsKey(playerName) ) {
             return LunaChat.getConfig().isJapanizePlayerDefault();
         }
@@ -288,7 +292,7 @@ public class ChannelManager implements LunaChatAPI {
     @Override
     public Collection<Channel> getChannels() {
 
-        return channels.values();
+        return new ArrayList<>(channels.values());
     }
 
     /**
@@ -319,7 +323,7 @@ public class ChannelManager implements LunaChatAPI {
      * @see com.github.ucchyocean.lc3.LunaChatAPI#getDefaultChannel(java.lang.String)
      */
     @Override
-    public Channel getDefaultChannel(String playerName) {
+    public synchronized Channel getDefaultChannel(String playerName) {
 
         String cname = defaultChannels.get(playerName);
 
@@ -336,7 +340,7 @@ public class ChannelManager implements LunaChatAPI {
      * @see com.github.ucchyocean.lc3.LunaChatAPI#setDefaultChannel(java.lang.String, java.lang.String)
      */
     @Override
-    public void setDefaultChannel(String playerName, String channelName) {
+    public synchronized void setDefaultChannel(String playerName, String channelName) {
         if ( channelName == null ) {
             removeDefaultChannel(playerName);
             return;
@@ -351,7 +355,7 @@ public class ChannelManager implements LunaChatAPI {
      * @see com.github.ucchyocean.lc3.LunaChatAPI#removeDefaultChannel(java.lang.String)
      */
     @Override
-    public void removeDefaultChannel(String playerName) {
+    public synchronized void removeDefaultChannel(String playerName) {
         if ( defaultChannels.containsKey(playerName) ) {
             defaultChannels.remove(playerName);
         }
@@ -416,9 +420,14 @@ public class ChannelManager implements LunaChatAPI {
             channel = new StandaloneChannel(name);
         }
 
-        channels.put(name.toLowerCase(), channel);
-        channel.save();
-        return channel;
+        synchronized (Channel.STORAGE_LOCK) {
+            Channel existing = channels.putIfAbsent(name.toLowerCase(), channel);
+            if ( existing != null ) {
+                return existing;
+            }
+            channel.save();
+            return channel;
+        }
     }
 
     /**
@@ -463,8 +472,11 @@ public class ChannelManager implements LunaChatAPI {
             }
 
             // チャンネルの削除
-            channel.remove();
-            channels.remove(channelName);
+            synchronized (Channel.STORAGE_LOCK) {
+                if ( channels.remove(channelName, channel) ) {
+                    channel.remove();
+                }
+            }
         }
 
         return true;
@@ -477,7 +489,7 @@ public class ChannelManager implements LunaChatAPI {
      * @see com.github.ucchyocean.lc3.LunaChatAPI#getTemplate(java.lang.String)
      */
     @Override
-    public String getTemplate(String id) {
+    public synchronized String getTemplate(String id) {
         return templates.get(id);
     }
 
@@ -488,7 +500,7 @@ public class ChannelManager implements LunaChatAPI {
      * @see com.github.ucchyocean.lc3.LunaChatAPI#setTemplate(java.lang.String, java.lang.String)
      */
     @Override
-    public void setTemplate(String id, String template) {
+    public synchronized void setTemplate(String id, String template) {
         templates.put(id, template);
         saveTemplates();
     }
@@ -499,7 +511,7 @@ public class ChannelManager implements LunaChatAPI {
      * @see com.github.ucchyocean.lc3.LunaChatAPI#removeTemplate(java.lang.String)
      */
     @Override
-    public void removeTemplate(String id) {
+    public synchronized void removeTemplate(String id) {
         templates.remove(id);
         saveTemplates();
     }
@@ -508,8 +520,8 @@ public class ChannelManager implements LunaChatAPI {
      * 辞書データを全て取得する
      * @return 辞書データ
      */
-    public HashMap<String, String> getAllDictionary() {
-        return dictionary;
+    public synchronized HashMap<String, String> getAllDictionary() {
+        return new HashMap<>(dictionary);
     }
 
     /**
@@ -517,7 +529,7 @@ public class ChannelManager implements LunaChatAPI {
      * @param key キー
      * @param value 値
      */
-    public void setDictionary(String key, String value) {
+    public synchronized void setDictionary(String key, String value) {
         dictionary.put(key, value);
         saveDictionary();
     }
@@ -526,7 +538,7 @@ public class ChannelManager implements LunaChatAPI {
      * 指定したキーの辞書データを削除する
      * @param key キー
      */
-    public void removeDictionary(String key) {
+    public synchronized void removeDictionary(String key) {
         dictionary.remove(key);
         saveDictionary();
     }
@@ -536,12 +548,12 @@ public class ChannelManager implements LunaChatAPI {
      * @param key プレイヤー
      * @return 指定されたプレイヤーをhideしているプレイヤー(非null)
      */
-    public List<ChannelMember> getHidelist(ChannelMember key) {
+    public synchronized List<ChannelMember> getHidelist(ChannelMember key) {
         if ( key == null ) {
             return new ArrayList<ChannelMember>();
         }
         if ( hidelist.containsKey(key.toString()) ) {
-            return hidelist.get(key.toString());
+            return new ArrayList<>(hidelist.get(key.toString()));
         }
         return new ArrayList<ChannelMember>();
     }
@@ -551,7 +563,7 @@ public class ChannelManager implements LunaChatAPI {
      * @param player プレイヤー
      * @return 指定したプレイヤーがhideしているプレイヤーのリスト(非null)
      */
-    public ArrayList<ChannelMember> getHideinfo(ChannelMember player) {
+    public synchronized ArrayList<ChannelMember> getHideinfo(ChannelMember player) {
         if ( player == null ) {
             return new ArrayList<ChannelMember>();
         }
@@ -569,7 +581,7 @@ public class ChannelManager implements LunaChatAPI {
      * @param player hideする側のプレイヤー
      * @param hided hideされる側のプレイヤー
      */
-    public void addHidelist(ChannelMember player, ChannelMember hided) {
+    public synchronized void addHidelist(ChannelMember player, ChannelMember hided) {
         String hidedId = hided.toString();
         if ( !hidelist.containsKey(hidedId) ) {
             hidelist.put(hidedId, new ArrayList<ChannelMember>());
@@ -585,7 +597,7 @@ public class ChannelManager implements LunaChatAPI {
      * @param player hideしていた側のプレイヤー
      * @param hided hideされていた側のプレイヤー
      */
-    public void removeHidelist(ChannelMember player, ChannelMember hided) {
+    public synchronized void removeHidelist(ChannelMember player, ChannelMember hided) {
         String hidedId = hided.toString();
         if ( !hidelist.containsKey(hidedId) ) {
             return;
@@ -626,7 +638,7 @@ public class ChannelManager implements LunaChatAPI {
      * @param doJapanize Japanize変換するかどうか
      */
     @Override
-    public void setPlayersJapanize(String playerName, boolean doJapanize) {
+    public synchronized void setPlayersJapanize(String playerName, boolean doJapanize) {
         japanize.put(playerName, doJapanize);
         saveJapanize();
     }

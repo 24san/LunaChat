@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.github.ucchyocean</groupId>
   <artifactId>LunaChat</artifactId>
-  <version>3.0.16</version>
+  <version>3.0.16-24san.1</version>
   <description>A powerfull chat channel plugin with IME (Kana-Kanji conversion) support</description>
   <url>https://github.com/ucchyocean/LunaChat</url>
 
@@ -16,8 +16,8 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <java.version>1.8</java.version>
-    <java.version.short>8</java.version.short>
+    <java.version>21</java.version>
+    <java.version.short>21</java.version.short>
   </properties>
 
   <distributionManagement>
@@ -67,7 +67,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
-        <version>3.2.1</version>
+        <version>3.6.1</version>
         <configuration>
           <createDependencyReducedPom>false</createDependencyReducedPom>
           <minimizeJar>true</minimizeJar>
@@ -123,6 +123,15 @@
 
   <repositories>
     <repository>
+      <id>papermc</id>
+      <url>https://repo.papermc.io/repository/maven-public/</url>
+      <releases><enabled>false</enabled></releases>
+    </repository>
+    <repository>
+      <id>central</id>
+      <url>https://repo.maven.apache.org/maven2</url>
+    </repository>
+    <repository>
       <id>jitpack.io</id>
       <name>Vault Repository</name>
       <url>https://jitpack.io/</url>
@@ -135,7 +144,7 @@
     <repository>
       <id>onarandombox-repo</id>
       <name>Multiverse repository</name>
-      <url>http://repo.onarandombox.com/content/repositories/multiverse/</url>
+      <url>https://repo.onarandombox.com/releases/</url>
     </repository>
     <repository>
       <id>codemc-repo</id>
@@ -145,39 +154,39 @@
     <repository>
       <id>weaondara-repo</id>
       <name>wea_ondara's Repository</name>
-      <url>http://repo.wea-ondara.net/repository/public/</url>
-    </repository>
-    <repository>
-      <id>md5-repo</id>
-      <name>MD5 repository</name>
-      <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
-    </repository>
-    <repository>
-      <id>BungeeCord-repo</id>
-      <name>sonatype repository</name>
-      <url>https://oss.sonatype.org/content/repositories/snapshots/</url>
+      <url>https://repo.wea-ondara.net/repository/public/</url>
     </repository>
   </repositories>
 
   <dependencies>
     <dependency>
-      <groupId>org.spigotmc</groupId>
-      <artifactId>spigot-api</artifactId>
-      <version>1.16.2-R0.1-SNAPSHOT</version>
+      <groupId>io.papermc.paper</groupId>
+      <artifactId>paper-api</artifactId>
+      <version>1.21.11-R0.1-SNAPSHOT</version>
+      <exclusions>
+        <exclusion>
+          <groupId>net.md-5</groupId>
+          <artifactId>bungeecord-chat</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.mojang</groupId>
+          <artifactId>brigadier</artifactId>
+        </exclusion>
+      </exclusions>
       <optional>true</optional>
       <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>net.md-5</groupId>
       <artifactId>bungeecord-api</artifactId>
-      <version>1.16-R0.2-SNAPSHOT</version>
+      <version>1.21-R0.4</version>
       <optional>true</optional>
       <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>net.md-5</groupId>
       <artifactId>bungeecord-chat</artifactId>
-      <version>1.16-R0.3</version>
+      <version>1.21-R0.4</version>
       <optional>true</optional>
       <scope>provided</scope>
     </dependency>
@@ -260,13 +269,13 @@
     <dependency>
       <groupId>org.bstats</groupId>
       <artifactId>bstats-bukkit</artifactId>
-      <version>1.7</version>
+      <version>3.1.0</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>org.bstats</groupId>
       <artifactId>bstats-bungeecord</artifactId>
-      <version>1.7</version>
+      <version>3.1.0</version>
       <scope>compile</scope>
     </dependency>
     <dependency>

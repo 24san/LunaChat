@@ -105,7 +105,7 @@ public class McMMOBridge implements Listener {
 
                 // 発言処理を必ず先に実施させるため、遅延を入れてタスクを実行する。
                 int wait = config.getJapanizeWait();
-                task.runTaskLater(LunaChatBukkit.getInstance(), wait);
+                LunaChatBukkit.getInstance().runAsyncTaskLater(task, wait);
             }
         }
 

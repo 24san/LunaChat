@@ -38,7 +38,7 @@ public class UUIDCacheData {
     /**
      * キャッシュデータを読み込む
      */
-    public void reload() {
+    public synchronized void reload() {
         File file = new File(dataFolder, FILE_NAME);
         if ( !file.exists() ) {
             // キャッシュファイルがまだ無いなら、からファイルを作成しておく。
@@ -56,7 +56,7 @@ public class UUIDCacheData {
     /**
      * キャッシュデータをファイルに保存する
      */
-    public void save() {
+    public synchronized void save() {
         File file = new File(dataFolder, FILE_NAME);
         try {
             cache.save(file);
@@ -70,7 +70,7 @@ public class UUIDCacheData {
      * @param uuid UUID
      * @param name プレイヤー名
      */
-    public void put(String uuid, String name) {
+    public synchronized void put(String uuid, String name) {
         cache.set(uuid, name);
     }
 
@@ -79,7 +79,7 @@ public class UUIDCacheData {
      * @param uuid UUID
      * @return プレイヤー名（キャッシュされていない場合はnullが返される）
      */
-    public @Nullable String get(String uuid) {
+    public synchronized @Nullable String get(String uuid) {
         return cache.getString(uuid);
     }
 
@@ -88,7 +88,7 @@ public class UUIDCacheData {
      * @param name プレイヤー名
      * @return UUID（キャッシュされていない場合はnullが返される）
      */
-    public @Nullable String getUUIDFromName(String name) {
+    public synchronized @Nullable String getUUIDFromName(String name) {
         if ( name == null ) return null;
         for ( String uuid : cache.getKeys(false) ) {
             String n = cache.getString(uuid);

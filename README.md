@@ -1,6 +1,11 @@
 LunaChat
 ========
 
+## 24san 版
+
+Minecraft 1.21.11 の Paper と Folia を対象としています。Java 21 で
+`mvn clean package` を実行すると、`target/LunaChat.jar` が生成されます。
+
 Build Status : [![Build Status](https://travis-ci.org/ucchyocean/LunaChat.svg?branch=master)](https://travis-ci.org/ucchyocean/LunaChat)
 
 チャンネルチャットプラグイン<br />
