@@ -13,6 +13,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -71,37 +73,37 @@ public abstract class Channel {
     private static final String KEY_JAPANIZE = "japanize";
 
     /** 参加者 */
-    private List<ChannelMember> members;
+    private volatile List<ChannelMember> members;
 
     /** チャンネルモデレータ */
-    private List<ChannelMember> moderator;
+    private volatile List<ChannelMember> moderator;
 
     /** BANされたプレイヤー */
-    private List<ChannelMember> banned;
+    private volatile List<ChannelMember> banned;
 
     /** Muteされたプレイヤー */
-    private List<ChannelMember> muted;
+    private volatile List<ChannelMember> muted;
 
     /** Hideしているプレイヤー */
-    private List<ChannelMember> hided;
+    private volatile List<ChannelMember> hided;
 
     /** チャンネルの名称 */
-    private String name;
+    private volatile String name;
 
     /** チャンネルの別名 */
-    private String alias;
+    private volatile String alias;
 
     /** チャンネルの説明文 */
-    private String description;
+    private volatile String description;
 
     /** チャンネルのパスワード */
-    private String password;
+    private volatile String password;
 
     /** チャンネルリストに表示されるかどうか */
-    private boolean visible;
+    private volatile boolean visible;
 
     /** チャンネルのカラー */
-    private String colorCode;
+    private volatile String colorCode;
 
     /** メッセージフォーマット<br>
      * 指定可能なキーワードは下記のとおり<br>
@@ -112,16 +114,16 @@ public abstract class Channel {
      * %suffix - PermissionsExに設定するsuffix<br>
      * %color - チャンネルのカラーコード
      * */
-    private String format;
+    private volatile String format;
 
     /** ブロードキャストチャンネルかどうか */
-    private boolean broadcastChannel;
+    private volatile boolean broadcastChannel;
 
     /** ワールドチャットかどうか */
-    private boolean isWorldRange;
+    private volatile boolean isWorldRange;
 
     /** チャットの可聴範囲 0は無制限 */
-    private int chatRange;
+    private volatile int chatRange;
 
     /** 期限付きBANの期限（key=プレイヤー名、value=期日（ミリ秒）） */
     private Map<ChannelMember, Long> banExpires;
@@ -130,14 +132,17 @@ public abstract class Channel {
     private Map<ChannelMember, Long> muteExpires;
 
     /** 1:1チャットの相手 */
-    private ChannelMember privateMessageTo;
+    private volatile ChannelMember privateMessageTo;
 
     /** カラーコードの使用可否 */
-    private boolean allowcc;
+    private volatile boolean allowcc;
 
     /** チャンネルごとのjapanize変換設定 */
-    private JapanizeType japanizeType;
+    private volatile JapanizeType japanizeType;
 
+
+    static final Object STORAGE_LOCK = new Object();
+    private boolean removed;
 
     protected LunaChatLogger logger;
 
@@ -150,19 +155,19 @@ public abstract class Channel {
         this.name = name;
         this.alias = "";
         this.description = "";
-        this.members = new ArrayList<ChannelMember>();
-        this.banned = new ArrayList<ChannelMember>();
-        this.muted = new ArrayList<ChannelMember>();
-        this.hided = new ArrayList<ChannelMember>();
-        this.moderator = new ArrayList<ChannelMember>();
+        this.members = new CopyOnWriteArrayList<>();
+        this.banned = new CopyOnWriteArrayList<>();
+        this.muted = new CopyOnWriteArrayList<>();
+        this.hided = new CopyOnWriteArrayList<>();
+        this.moderator = new CopyOnWriteArrayList<>();
         this.password = "";
         this.visible = true;
         this.colorCode = "";
         this.broadcastChannel = false;
         this.isWorldRange = false;
         this.chatRange = 0;
-        this.banExpires = new HashMap<ChannelMember, Long>();
-        this.muteExpires = new HashMap<ChannelMember, Long>();
+        this.banExpires = new ConcurrentHashMap<ChannelMember, Long>();
+        this.muteExpires = new ConcurrentHashMap<ChannelMember, Long>();
         this.privateMessageTo = null;
         this.allowcc = true;
 
@@ -483,7 +488,7 @@ public abstract class Channel {
      * メンバーを追加する
      * @param player 追加するプレイヤー
      */
-    public void addMember(ChannelMember player) {
+    public synchronized void addMember(ChannelMember player) {
 
         // 既に参加しているなら、何もしない
         if ( members.contains(player) ) {
@@ -504,7 +509,7 @@ public abstract class Channel {
         if ( members.size() == 0 && moderator.size() == 0 ) {
             moderator.add(player);
         }
-        members = after;
+        members = new CopyOnWriteArrayList<>(after);
 
         if ( !isPersonalChat() ) {
             player.sendMessage(Messages.joinMessage(getColorCode(), getName(), player.getName()));
@@ -517,7 +522,7 @@ public abstract class Channel {
      * メンバーを削除する
      * @param player 削除するプレイヤー
      */
-    public void removeMember(ChannelMember player) {
+    public synchronized void removeMember(ChannelMember player) {
 
         // 既に削除しているなら、何もしない
         if ( !members.contains(player) ) {
@@ -573,7 +578,7 @@ public abstract class Channel {
      * モデレータを追加する
      * @param player 追加するプレイヤー
      */
-    public void addModerator(ChannelMember player) {
+    public synchronized void addModerator(ChannelMember player) {
 
         // 既にモデレータなら何もしない
         if ( moderator.contains(player) ) {
@@ -595,7 +600,7 @@ public abstract class Channel {
      * モデレータを削除する
      * @param player 削除するプレイヤー
      */
-    public void removeModerator(ChannelMember player) {
+    public synchronized void removeModerator(ChannelMember player) {
 
         // 既にモデレータでないなら何もしない
         if ( !moderator.contains(player) ) {
@@ -769,16 +774,16 @@ public abstract class Channel {
     /**
      * 期限付きBanや期限付きMuteをチェックし、期限が切れていたら解除を行う
      */
-    public void checkExpires() {
+    public synchronized void checkExpires() {
 
         long now = System.currentTimeMillis();
 
         // 期限付きBANのチェック
-        for ( ChannelMember cp : getBanExpires().keySet() ) {
-            if ( getBanExpires().get(cp) <= now ) {
+        for ( Map.Entry<ChannelMember, Long> expiry : getBanExpires().entrySet() ) {
+            ChannelMember cp = expiry.getKey();
+            if ( expiry.getValue() <= now && getBanExpires().remove(cp, expiry.getValue()) ) {
 
                 // 期限マップから削除し、BANを解除
-                getBanExpires().remove(cp);
                 if ( getBanned().contains(cp) ) {
                     getBanned().remove(cp);
                     save();
@@ -798,11 +803,11 @@ public abstract class Channel {
         }
 
         // 期限付きMuteのチェック
-        for ( ChannelMember cp : getMuteExpires().keySet() ) {
-            if ( getMuteExpires().get(cp) <= now ) {
+        for ( Map.Entry<ChannelMember, Long> expiry : getMuteExpires().entrySet() ) {
+            ChannelMember cp = expiry.getKey();
+            if ( expiry.getValue() <= now && getMuteExpires().remove(cp, expiry.getValue()) ) {
 
                 // 期限マップから削除し、Muteを解除
-                getMuteExpires().remove(cp);
                 if ( getMuted().contains(cp) ) {
                     getMuted().remove(cp);
                     save();
@@ -915,19 +920,19 @@ public abstract class Channel {
         channel.alias = castWithDefault(data.get(KEY_ALIAS), "");
         channel.description = castWithDefault(data.get(KEY_DESC), "");
         channel.format = castWithDefault(data.get(KEY_FORMAT), channel.format);
-        channel.members = castToChannelMemberList(data.get(KEY_MEMBERS));
-        channel.banned = castToChannelMemberList(data.get(KEY_BANNED));
-        channel.muted = castToChannelMemberList(data.get(KEY_MUTED));
-        channel.hided = castToChannelMemberList(data.get(KEY_HIDED));
-        channel.moderator = castToChannelMemberList(data.get(KEY_MODERATOR));
+        channel.members = new CopyOnWriteArrayList<>(castToChannelMemberList(data.get(KEY_MEMBERS)));
+        channel.banned = new CopyOnWriteArrayList<>(castToChannelMemberList(data.get(KEY_BANNED)));
+        channel.muted = new CopyOnWriteArrayList<>(castToChannelMemberList(data.get(KEY_MUTED)));
+        channel.hided = new CopyOnWriteArrayList<>(castToChannelMemberList(data.get(KEY_HIDED)));
+        channel.moderator = new CopyOnWriteArrayList<>(castToChannelMemberList(data.get(KEY_MODERATOR)));
         channel.password = castWithDefault(data.get(KEY_PASSWORD), "");
         channel.visible = castWithDefault(data.get(KEY_VISIBLE), true);
         channel.colorCode = castWithDefault(data.get(KEY_COLOR), "");
         channel.broadcastChannel = castWithDefault(data.get(KEY_BROADCAST), false);
         channel.isWorldRange = castWithDefault(data.get(KEY_WORLD), false);
         channel.chatRange = castWithDefault(data.get(KEY_RANGE), 0);
-        channel.banExpires = castToChannelMemberLongMap(data.get(KEY_BAN_EXPIRES));
-        channel.muteExpires = castToChannelMemberLongMap(data.get(KEY_MUTE_EXPIRES));
+        channel.banExpires = new ConcurrentHashMap<>(castToChannelMemberLongMap(data.get(KEY_BAN_EXPIRES)));
+        channel.muteExpires = new ConcurrentHashMap<>(castToChannelMemberLongMap(data.get(KEY_MUTE_EXPIRES)));
         channel.allowcc = castWithDefault(data.get(KEY_ALLOWCC), true);
         channel.japanizeType = JapanizeType.fromID(data.get(KEY_JAPANIZE) + "", null);
         return channel;
@@ -1186,6 +1191,12 @@ public abstract class Channel {
      * @return 保存をしたかどうか。
      */
     public boolean save() {
+        synchronized (STORAGE_LOCK) {
+            return !removed && saveToFile();
+        }
+    }
+
+    private boolean saveToFile() {
 
         // フォルダーの取得と、必要に応じて作成
         File folder = new File(
@@ -1221,6 +1232,7 @@ public abstract class Channel {
      * @return 削除したかどうか。
      */
     protected boolean remove() {
+        removed = true;
 
         // フォルダーの取得
         File folder = new File(

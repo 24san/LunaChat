@@ -89,7 +89,7 @@ public class LunaChatLogger {
      * @param reverse 逆順取得
      * @return ログデータ
      */
-    public ArrayList<String> getLog(
+    public synchronized ArrayList<String> getLog(
             String player, String filter, String date, boolean reverse) {
 
         // 指定された日付のログを取得する

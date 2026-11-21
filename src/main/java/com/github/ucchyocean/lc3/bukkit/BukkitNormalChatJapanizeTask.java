@@ -5,13 +5,15 @@
  */
 package com.github.ucchyocean.lc3.bukkit;
 
+import java.util.Collection;
+import java.util.List;
+
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import org.bukkit.event.player.AsyncPlayerChatEvent;
-import org.bukkit.scheduler.BukkitRunnable;
 
 import com.github.ucchyocean.lc3.LunaChat;
 import com.github.ucchyocean.lc3.LunaChatBukkit;
+import com.github.ucchyocean.lc3.bridge.DynmapBridge;
 import com.github.ucchyocean.lc3.channel.JapanizeConvertTask;
 import com.github.ucchyocean.lc3.japanize.JapanizeType;
 import com.github.ucchyocean.lc3.member.ChannelMember;
@@ -21,10 +23,10 @@ import com.github.ucchyocean.lc3.member.ChannelMemberPlayer;
  * Japanize2行表示のときに、変換結果を遅延して通常チャットに表示するためのタスク
  * @author ucchy
  */
-public class BukkitNormalChatJapanizeTask extends BukkitRunnable {
+public class BukkitNormalChatJapanizeTask implements Runnable {
 
     private ChannelMember player;
-    private AsyncPlayerChatEvent event;
+    private final List<Player> recipients;
 
     private JapanizeConvertTask task;
 
@@ -34,14 +36,14 @@ public class BukkitNormalChatJapanizeTask extends BukkitRunnable {
      * @param type 変換タイプ
      * @param player 発言したプレイヤー
      * @param japanizeFormat 変換後に発言するときの、発言フォーマット
-     * @param event イベント
+     * @param recipients メッセージ受信者
      */
     public BukkitNormalChatJapanizeTask(String org, JapanizeType type,
-            ChannelMember player, String japanizeFormat, final AsyncPlayerChatEvent event) {
+            ChannelMember player, String japanizeFormat, Collection<Player> recipients) {
 
         task = new JapanizeConvertTask(org, type, japanizeFormat, null, player);
         this.player = player;
-        this.event = event;
+        this.recipients = List.copyOf(recipients);
     }
 
     /**
@@ -54,20 +56,22 @@ public class BukkitNormalChatJapanizeTask extends BukkitRunnable {
 
             String result = task.getResult();
 
+            LunaChatBukkit plugin = LunaChatBukkit.getInstance();
             // 送信
-            for ( Player p : event.getRecipients() ) {
-                p.sendMessage(result);
+            for ( Player p : recipients ) {
+                plugin.runForPlayer(p, () -> p.sendMessage(result));
             }
             Bukkit.getConsoleSender().sendMessage(result);
 
             // 設定に応じてdynmapへ送信する
-            if ( LunaChat.getConfig().isSendBroadcastChannelChatToDynmap() &&
-                    LunaChatBukkit.getInstance().getDynmap() != null ) {
-                if ( player != null && player instanceof ChannelMemberPlayer
-                        && ((ChannelMemberPlayer)player).getPlayer() != null )
-                    LunaChatBukkit.getInstance().getDynmap().chat(((ChannelMemberPlayer)player).getPlayer(), result);
-                else
-                    LunaChatBukkit.getInstance().getDynmap().broadcast(result);
+            DynmapBridge dynmap = plugin.getDynmap();
+            if ( LunaChat.getConfig().isSendBroadcastChannelChatToDynmap() && dynmap != null ) {
+                Player source = player instanceof ChannelMemberPlayer member ? member.getPlayer() : null;
+                if ( source != null ) {
+                    plugin.runForPlayer(source, () -> dynmap.chat(source, result));
+                } else {
+                    dynmap.broadcast(result);
+                }
             }
         }
     }

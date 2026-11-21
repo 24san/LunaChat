@@ -168,7 +168,7 @@ public class ChannelMemberPlayer extends ChannelMemberBukkit {
         if ( message == null || message.isEmpty() ) return;
         Player player = getPlayer();
         if ( player != null ) {
-            player.sendMessage(message);
+            LunaChatBukkit.getInstance().runForPlayer(player, () -> player.sendMessage(message));
         }
     }
 
@@ -181,7 +181,7 @@ public class ChannelMemberPlayer extends ChannelMemberBukkit {
         if ( message == null || message.length == 0 ) return;
         Player player = getPlayer();
         if ( player != null ) {
-            player.spigot().sendMessage(message);
+            LunaChatBukkit.getInstance().runForPlayer(player, () -> player.spigot().sendMessage(message));
         }
     }
 
@@ -202,9 +202,8 @@ public class ChannelMemberPlayer extends ChannelMemberBukkit {
      */
     @Override
     public World getWorld() {
-        Player player = getPlayer();
-        if ( player != null ) return player.getWorld();
-        return null;
+        Location location = getLocation();
+        return location == null ? null : location.getWorld();
     }
 
     /**
@@ -231,7 +230,7 @@ public class ChannelMemberPlayer extends ChannelMemberBukkit {
     public Location getLocation() {
         Player player = getPlayer();
         if ( player != null ) {
-            return player.getLocation();
+            return LunaChatBukkit.getInstance().getPlayerLocation(player);
         }
         return null;
     }
@@ -276,7 +275,7 @@ public class ChannelMemberPlayer extends ChannelMemberBukkit {
     public void chat(String message) {
         Player player = getPlayer();
         if ( player != null ) {
-            player.chat(message);
+            LunaChatBukkit.getInstance().runForPlayer(player, () -> player.chat(message));
         }
     }
 

@@ -110,6 +110,11 @@ public abstract class ChannelMember implements Comparable<ChannelMember> {
         return this.toString().equals(other.toString());
     }
 
+    @Override
+    public int hashCode() {
+        return toString().hashCode();
+    }
+
     /**
      * インスタンス同士の比較を行う。このメソッドを実装しておくことで、
      * Java8でのHashMapのキー挿入における高速化が期待できる（らしい）。

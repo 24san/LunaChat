@@ -9,8 +9,8 @@ import java.util.List;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitRunnable;
 
+import com.github.ucchyocean.lc3.LunaChatBukkit;
 import com.github.ucchyocean.lc3.channel.JapanizeConvertTask;
 import com.github.ucchyocean.lc3.japanize.JapanizeType;
 import com.github.ucchyocean.lc3.member.ChannelMember;
@@ -20,7 +20,7 @@ import com.github.ucchyocean.lc3.member.ChannelMember;
  * 他プラグインのチャンネル（mcMMOのパーティチャットや、TownyChatなど）に、Japanize変換結果を表示するために使用する。
  * @author ucchy
  */
-public class BukkitRecipientChatJapanizeTask extends BukkitRunnable {
+public class BukkitRecipientChatJapanizeTask implements Runnable {
 
     private List<Player> recipients;
 
@@ -37,7 +37,7 @@ public class BukkitRecipientChatJapanizeTask extends BukkitRunnable {
     public BukkitRecipientChatJapanizeTask(String org, JapanizeType type, ChannelMember player,
             String japanizeFormat, List<Player> recipients) {
         task = new JapanizeConvertTask(org, type, japanizeFormat, null, player);
-        this.recipients = recipients;
+        this.recipients = List.copyOf(recipients);
     }
 
     /**
@@ -50,9 +50,10 @@ public class BukkitRecipientChatJapanizeTask extends BukkitRunnable {
 
             String result = task.getResult();
 
+            LunaChatBukkit plugin = LunaChatBukkit.getInstance();
             // 送信
             for ( Player p : recipients ) {
-                p.sendMessage(result);
+                plugin.runForPlayer(p, () -> p.sendMessage(result));
             }
             Bukkit.getConsoleSender().sendMessage(result);
         }
